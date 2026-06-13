@@ -44,6 +44,10 @@
 
         <!-- Step actions -->
         <WrapPanel x:Name="StepActions" Visibility="Collapsed">
+            <Button Content="测试当前步骤" Style="{StaticResource PrimaryButtonStyle}" Click="OnTestStepClick"/>
+            <Button Content="截图取样" Margin="5,0" Style="{StaticResource PrimaryButtonStyle}" Click="OnCaptureScreenshotClick"/>
+            <Button Content="新增OCR区域" Margin="5,0" Style="{StaticResource PrimaryButtonStyle}" Click="OnAddOcrRegionClick"/>
+            <Separator Width="1" Height="24" Margin="5,0"/>
             <Button Content="上移" Click="OnMoveUpClick"/>
             <Button Content="下移" Margin="5,0" Click="OnMoveDownClick"/>
             <Button Content="编辑参数" Style="{StaticResource PrimaryButtonStyle}" Click="OnEditStepParamsClick"/>

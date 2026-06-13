@@ -1,10 +1,12 @@
 using System.IO;
 using System.Windows;
 using SkyAuto.App.Views;
+using SkyAuto.Core.Assets;
 using SkyAuto.Core.Engine;
 using SkyAuto.Core.Models;
 using SkyAuto.Core.Ola;
 using SkyAuto.Core.Runtime;
+using SkyAuto.Core.StepTesting;
 using SkyAuto.Infrastructure.Logging;
 using SkyAuto.Infrastructure.Scheduling;
 using SkyAuto.Infrastructure.SelfCheck;
@@ -22,6 +24,8 @@ public partial class MainWindow : Window
     private AppLogger? _logger;
     private IOlaClient? _olaClient;
     private IWorkflowRunLockService? _lockService;
+    private IStepTestService? _stepTestService;
+    private IAssetCaptureService? _assetCaptureService;
     private string _dataDir = "data";
 
     public MainWindow()
@@ -58,6 +62,10 @@ public partial class MainWindow : Window
         // Re-initialize runner with lock service
         _runner = new WorkflowRunner(_executors, dataDir, _lockService);
 
+        // Initialize step test and asset capture services
+        _stepTestService = new StepTestService(_executors, _lockService);
+        _assetCaptureService = new AssetCaptureService();
+
         // Initialize OlaClient with Mock mode by default
         _olaClient = new OlaMockClient();
         _olaClient.Initialize("");
@@ -92,7 +100,7 @@ public partial class MainWindow : Window
     private static IActionStepExecutor? CreateExecutor(string type) => StepExecutorFactory.Create(type);
     private void OnNavigateDashboard(object? sender, RoutedEventArgs? e) => ShowContent(new DashboardView(_store!, _olaRegistry!));
     private void OnNavigateWorkflows(object? sender, RoutedEventArgs? e) => ShowContent(new WorkflowListView(_store!, _runner));
-    private void OnNavigateEditor(object? sender, RoutedEventArgs? e) => ShowContent(new WorkflowEditorView(_store!, _olaRegistry!, _runner));
+    private void OnNavigateEditor(object? sender, RoutedEventArgs? e) => ShowContent(new WorkflowEditorView(_store!, _olaRegistry!, _runner, _stepTestService, _assetCaptureService, _dataDir));
     private void OnNavigateAssets(object? sender, RoutedEventArgs? e) => ShowContent(new AssetLibraryView(_store!));
     private void OnNavigateSchedules(object? sender, RoutedEventArgs? e) => ShowContent(new ScheduleView(_store!, _scheduler!));
     private void OnNavigateLogs(object? sender, RoutedEventArgs? e) => ShowContent(new RunLogView(_store!));

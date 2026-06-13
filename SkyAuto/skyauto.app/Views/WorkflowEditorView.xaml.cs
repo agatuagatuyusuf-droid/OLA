@@ -1,9 +1,11 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using SkyAuto.Core.Assets;
 using SkyAuto.Core.Engine;
 using SkyAuto.Core.Models;
 using SkyAuto.Core.Ola;
+using SkyAuto.Core.StepTesting;
 using SkyAuto.Infrastructure.Storage;
 
 namespace SkyAuto.App.Views;
@@ -13,14 +15,20 @@ public partial class WorkflowEditorView : UserControl
     private readonly SqliteStore _store;
     private readonly OlaFunctionRegistry _olaRegistry;
     private readonly WorkflowRunner? _runner;
+    private readonly IStepTestService? _stepTestService;
+    private readonly IAssetCaptureService? _assetCaptureService;
+    private readonly string _dataDir;
     private Workflow? _currentWorkflow;
 
-    public WorkflowEditorView(SqliteStore store, OlaFunctionRegistry olaRegistry, WorkflowRunner? runner)
+    public WorkflowEditorView(SqliteStore store, OlaFunctionRegistry olaRegistry, WorkflowRunner? runner, IStepTestService? stepTestService = null, IAssetCaptureService? assetCaptureService = null, string dataDir = "")
     {
         InitializeComponent();
         _store = store;
         _olaRegistry = olaRegistry;
         _runner = runner;
+        _stepTestService = stepTestService;
+        _assetCaptureService = assetCaptureService;
+        _dataDir = dataDir;
         LoadWorkflows();
         LoadActions();
         StepsGrid.SelectionChanged += OnStepSelected;
@@ -233,6 +241,98 @@ public partial class WorkflowEditorView : UserControl
         var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "data", "workflows", $"{_currentWorkflow.Name}_{DateTime.Now:yyyyMMddHHmmss}.json");
         File.WriteAllText(path, json);
         MessageBox.Show($"已导出到:\n{path}", "导出成功");
+    }
+
+    private async void OnTestStepClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentWorkflow == null || StepsGrid.SelectedItem is not WorkflowStep step || _stepTestService == null)
+        {
+            StatusText.Text = "请先选择一个步骤";
+            return;
+        }
+
+        try
+        {
+            StatusText.Text = $"测试步骤: {step.Type}...";
+            var request = new StepTestRequest
+            {
+                Workflow = _currentWorkflow,
+                Step = step,
+                DataDir = _dataDir,
+                LockWaitTimeout = TimeSpan.FromSeconds(10)
+            };
+            var result = await _stepTestService.TestStepAsync(request);
+
+            var msg = result.Success
+                ? $"成功 | 输出: {result.OutputData ?? "(空)"}"
+                : $"失败 | 错误: {result.Error}\n截图: {result.ScreenshotPath ?? "(无)"}";
+
+            MessageBox.Show(msg, $"单步测试结果 - {step.Type}");
+            StatusText.Text = result.Success ? "单步测试通过" : "单步测试失败";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"测试异常: {ex.Message}";
+        }
+    }
+
+    private async void OnCaptureScreenshotClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentWorkflow == null || StepsGrid.SelectedItem is not WorkflowStep step || _assetCaptureService == null)
+        {
+            StatusText.Text = "请先选择一个步骤";
+            return;
+        }
+
+        try
+        {
+            var name = PromptDialog.Show("截图取样", "请输入素材名称");
+            if (string.IsNullOrWhiteSpace(name)) return;
+
+            StatusText.Text = $"正在截图取样: {name}...";
+
+            var executor = StepExecutorFactory.Create("screenshot");
+            if (executor == null)
+            {
+                StatusText.Text = "截图执行器不可用";
+                return;
+            }
+
+            var asset = await _assetCaptureService.CaptureScreenAsImageAssetAsync(name, _dataDir, executor);
+            _store.SaveAsset(asset);
+            StatusText.Text = $"截图已保存: {asset.Name} ({asset.FilePath})";
+            MessageBox.Show($"截图素材已保存:\n{asset.FilePath}", "截图取样成功");
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"截图取样失败: {ex.Message}";
+            MessageBox.Show($"截图取样失败:\n{ex.Message}", "错误");
+        }
+    }
+
+    private void OnAddOcrRegionClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentWorkflow == null || StepsGrid.SelectedItem is not WorkflowStep step || _assetCaptureService == null)
+        {
+            StatusText.Text = "请先选择一个步骤";
+            return;
+        }
+
+        try
+        {
+            var name = PromptDialog.Show("新增OCR区域", "请输入OCR区域名称");
+            if (string.IsNullOrWhiteSpace(name)) return;
+
+            // Default region: 0,0,100,100 - user can edit later
+            var asset = _assetCaptureService.CreateOcrRegionAsset(name, 0, 0, 100, 100, _dataDir);
+            _store.SaveAsset(asset);
+            StatusText.Text = $"OCR区域已创建: {asset.Name}";
+            MessageBox.Show($"OCR区域配置已保存:\n{asset.FilePath}", "新增OCR区域成功");
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"创建OCR区域失败: {ex.Message}";
+        }
     }
 
     private class PromptDialog
