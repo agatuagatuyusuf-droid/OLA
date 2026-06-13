@@ -1,0 +1,32 @@
+<UserControl x:Class="SkyAuto.App.Views.ScheduleView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="10">
+            <TextBlock Text="定时任务" Style="{StaticResource SectionHeaderStyle}"/>
+
+            <WrapPanel Margin="0,0,0,10">
+                <Button Content="+ 新建定时规则" Style="{StaticResource PrimaryButtonStyle}" Click="OnAddScheduleClick"/>
+            </WrapPanel>
+
+            <DataGrid x:Name="ScheduleGrid" AutoGenerateColumns="False" CanUserAddRows="False">
+                <DataGrid.Columns>
+                    <DataGridCheckBoxColumn Header="启用" Binding="{Binding Enabled}" Width="50"/>
+                    <DataGridTextColumn Header="绑定流程ID" Binding="{Binding WorkflowId}" Width="180"/>
+                    <DataGridTextColumn Header="规则类型" Binding="{Binding RuleType}" Width="100"/>
+                    <DataGridTextColumn Header="Cron/间隔(分)" Binding="{Binding IntervalMinutes, StringFormat={}{0}分钟}" Width="120"/>
+                    <DataGridTextColumn Header="下次执行时间" Binding="{Binding NextRunTime, StringFormat={}{0:yyyy-MM-dd HH:mm}}" Width="140"/>
+                    <DataGridTextColumn Header="最近结果" Binding="{Binding LastResult}" Width="*"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <WrapPanel x:Name="ScheduleActions" Visibility="Collapsed">
+                <Button Content="启动" Background="#48BB78" Foreground="White" Click="OnStartScheduleClick"/>
+                <Button Content="停止" Margin="5,0" Click="OnStopScheduleClick"/>
+                <Button Content="删除" Style="{StaticResource DangerButtonStyle}" Margin="10,0" Click="onDeleteScheduleClick"/>
+            </WrapPanel>
+
+            <TextBlock x:Name="StatusText" Foreground="#718096" Margin="0,10,0,0"/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

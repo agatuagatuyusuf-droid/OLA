@@ -1,0 +1,62 @@
+<UserControl x:Class="SkyAuto.App.Views.WorkflowEditorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel Margin="10">
+        <!-- Toolbar -->
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <TextBlock Text="选择流程: " VerticalAlignment="Center"/>
+            <ComboBox x:Name="WorkflowSelector" Width="200" Height="30" SelectionChanged="OnWorkflowSelected"/>
+            <Button Content="+ 新建" Margin="5,0" Click="OnNewWorkflowClick"/>
+
+            <Separator Width="1" Height="24" Margin="15,0"/>
+
+            <TextBlock Text="添加步骤: " VerticalAlignment="Center"/>
+            <ComboBox x:Name="ActionSelector" Width="180" Height="30"/>
+            <Button Content="+ 添加" Style="{StaticResource PrimaryButtonStyle}" Click="OnAddStepClick"/>
+
+            <Separator Width="1" Height="24" Margin="15,0"/>
+
+            <Button Content="保存流程" Style="{StaticResource PrimaryButtonStyle}" Click="OnSaveWorkflowClick"/>
+            <Button Content="运行流程" Background="#48BB78" Foreground="White" Style="{StaticResource PrimaryButtonStyle}" Click="OnRunWorkflowClick" Margin="5,0"/>
+            <Button Content="导出 JSON" Click="OnExportJsonClick" Margin="10,0"/>
+
+            <TextBlock x:Name="StatusText" Foreground="#718096" VerticalAlignment="Center" Margin="20,0,0,0"/>
+        </WrapPanel>
+
+        <!-- Steps table -->
+        <DataGrid x:Name="StepsGrid" AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Single" Margin="0,0,0,10">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="50"/>
+                <DataGridTextColumn Header="分类" Binding="{Binding Category}" Width="80"/>
+                <DataGridTextColumn Header="动作名称" Binding="{Binding Type}" Width="130"/>
+                <DataGridTemplateColumn Header="参数摘要" Width="250">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding ParamSummary}" TextTrimming="CharacterEllipsis" MaxWidth="240"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="超时(秒)" Binding="{Binding TimeoutSeconds}" Width="70"/>
+                <DataGridTextColumn Header="重试" Binding="{Binding RetryCount}" Width="50"/>
+                <DataGridCheckBoxColumn Header="启用" Binding="{Binding Enabled}" Width="50"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Step actions -->
+        <WrapPanel x:Name="StepActions" Visibility="Collapsed">
+            <Button Content="上移" Click="OnMoveUpClick"/>
+            <Button Content="下移" Margin="5,0" Click="OnMoveDownClick"/>
+            <Button Content="编辑参数" Style="{StaticResource PrimaryButtonStyle}" Click="OnEditStepParamsClick"/>
+            <Button Content="删除步骤" Style="{StaticResource DangerButtonStyle}" Margin="10,0" Click="OnDeleteStepClick"/>
+        </WrapPanel>
+
+        <!-- Parameter editor -->
+        <GroupBox Header="参数编辑" x:Name="ParamEditor" Visibility="Collapsed" Margin="0,10">
+            <StackPanel x:Name="ParamFields" Margin="5"/>
+        </GroupBox>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" DockPanel.Dock="Bottom" MaxHeight="300" Margin="0,10">
+            <TextBlock x:Name="HelpText" TextWrapping="Wrap" Foreground="#718096"/>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

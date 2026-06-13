@@ -1,0 +1,34 @@
+<Window x:Class="SkyAuto.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SkyAuto OLA 自动化助手" Height="700" Width="1100" MinWidth="900" MinHeight="500">
+    <DockPanel>
+        <!-- Top bar -->
+        <Border DockPanel.Dock="Top" Height="40" Background="#2D3748">
+            <Grid>
+                <TextBlock Text="SkyAuto OLA 自动化助手" Foreground="White" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="15,0"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="10,0">
+                    <Button Content="立即自检" Width="80" Height="28" Style="{StaticResource TopBarButtonStyle}" Click="OnSelfCheckClick"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Sidebar -->
+        <Border DockPanel.Dock="Left" Width="160" Background="#F7FAFC" BorderBrush="#E2E8F0">
+            <StackPanel Margin="0,5">
+                <Button Content="首页总览" Style="{StaticResource NavButtonStyle}" Click="OnNavigateDashboard"/>
+                <Button Content="自动化列表" Style="{StaticResource NavButtonStyle}" Click="OnNavigateWorkflows"/>
+                <Button Content="步骤编辑器" Style="{StaticResource NavButtonStyle}" Click="OnNavigateEditor"/>
+                <Button Content="素材库" Style="{StaticResource NavButtonStyle}" Click="OnNavigateAssets"/>
+                <Button Content="定时任务" Style="{StaticResource NavButtonStyle}" Click="OnNavigateSchedules"/>
+                <Button Content="执行日志" Style="{StaticResource NavButtonStyle}" Click="OnNavigateLogs"/>
+                <Button Content="OLA 设置" Style="{StaticResource NavButtonStyle}" Click="OnNavigateOlaSettings"/>
+                <Button Content="OLA函数管理" Style="{StaticResource NavButtonStyle}" Click="OnNavigateOlaFunctionManager"/>
+                <Button Content="自检轮询" Style="{StaticResource NavButtonStyle}" Click="OnNavigateSelfCheck"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Main content area -->
+        <ContentControl x:Name="MainContent" Margin="10"/>
+    </DockPanel>
+</Window>

@@ -1,0 +1,40 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SkyAuto.App", "SkyAuto\skyauto.app\SkyAuto.App.csproj", "{D8C9FDD7-0A86-43ED-9C23-09366B36C2D2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SkyAuto.Core", "SkyAuto\skyauto.core\SkyAuto.Core.csproj", "{48A2B110-C01C-4475-87C8-FBB35A314852}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SkyAuto.Infrastructure", "SkyAuto\skyauto.infrastructure\SkyAuto.Infrastructure.csproj", "{60704749-BE79-4AEB-B343-64F25FBAD9FA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SkyAuto.Tests", "SkyAuto\skyauto.tests\SkyAuto.Tests.csproj", "{EBEA0FD1-5DD8-4431-B146-B09B23033C89}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D8C9FDD7-0A86-43ED-9C23-09366B36C2D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D8C9FDD7-0A86-43ED-9C23-09366B36C2D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D8C9FDD7-0A86-43ED-9C23-09366B36C2D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D8C9FDD7-0A86-43ED-9C23-09366B36C2D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{48A2B110-C01C-4475-87C8-FBB35A314852}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{48A2B110-C01C-4475-87C8-FBB35A314852}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{48A2B110-C01C-4475-87C8-FBB35A314852}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{48A2B110-C01C-4475-87C8-FBB35A314852}.Release|Any CPU.Build.0 = Release|Any CPU
+		{60704749-BE79-4AEB-B343-64F25FBAD9FA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{60704749-BE79-4AEB-B343-64F25FBAD9FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{60704749-BE79-4AEB-B343-64F25FBAD9FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{60704749-BE79-4AEB-B343-64F25FBAD9FA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EBEA0FD1-5DD8-4431-B146-B09B23033C89}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EBEA0FD1-5DD8-4431-B146-B09B23033C89}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EBEA0FD1-5DD8-4431-B146-B09B23033C89}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EBEA0FD1-5DD8-4431-B146-B09B23033C89}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

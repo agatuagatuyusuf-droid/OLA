@@ -1,0 +1,41 @@
+<UserControl x:Class="SkyAuto.App.Views.AssetLibraryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="10">
+            <TextBlock Text="素材库" Style="{StaticResource SectionHeaderStyle}"/>
+
+            <WrapPanel Margin="0,0,0,10">
+                <Button Content="+ 添加素材" Style="{StaticResource PrimaryButtonStyle}" Click="OnAddAssetClick"/>
+                <Separator Width="1" Height="24" Margin="15,0"/>
+                <TextBlock Text="类型: " VerticalAlignment="Center"/>
+                <ComboBox x:Name="TypeFilter" Width="120" Height="28">
+                    <ComboBoxItem Content="全部"/>
+                    <ComboBoxItem Content="图片模板"/>
+                    <ComboBoxItem Content="OCR 区域"/>
+                    <ComboBoxItem Content="找色点"/>
+                    <ComboBoxItem Content="文件"/>
+                    <ComboBoxItem Content="账号变量"/>
+                    <ComboBoxItem Content="普通变量"/>
+                </ComboBox>
+            </WrapPanel>
+
+            <DataGrid x:Name="AssetGrid" AutoGenerateColumns="False" CanUserAddRows="False">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="120"/>
+                    <DataGridTextColumn Header="名称" Binding="{Binding Name}" Width="150"/>
+                    <DataGridTextColumn Header="类型" Binding="{Binding Type}" Width="80"/>
+                    <DataGridTextColumn Header="文件路径" Binding="{Binding FilePath}" Width="250"/>
+                    <DataGridTextColumn Header="描述" Binding="{Binding Description}" Width="*"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <WrapPanel x:Name="AssetActions" Visibility="Collapsed">
+                <Button Content="编辑" Style="{StaticResource PrimaryButtonStyle}" Click="OnEditAssetClick"/>
+                <Button Content="删除" Style="{StaticResource DangerButtonStyle}" Margin="5,0" Click="OnDeleteAssetClick"/>
+            </WrapPanel>
+
+            <TextBlock x:Name="StatusText" Foreground="#718096" Margin="0,10,0,0"/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
