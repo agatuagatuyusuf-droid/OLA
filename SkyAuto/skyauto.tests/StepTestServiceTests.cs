@@ -41,6 +41,8 @@ public class StepTestServiceTests
             Assert.True(result.Success);
             Assert.Equal("output-ok", result.OutputData);
             Assert.NotEmpty(result.EvidenceJson);
+            Assert.True(result.DurationMs >= 0);
+            Assert.True(result.EndedAt >= result.StartedAt);
         }
         finally { Cleanup(dataDir); }
     }
@@ -64,6 +66,9 @@ public class StepTestServiceTests
             Assert.Contains("故意失败", result.Error ?? "");
             Assert.NotNull(result.ScreenshotPath);
             Assert.True(File.Exists(result.ScreenshotPath));
+            Assert.NotEmpty(result.EvidenceJson);
+            Assert.True(result.DurationMs >= 0);
+            Assert.True(result.EndedAt >= result.StartedAt);
         }
         finally { Cleanup(dataDir); }
     }
@@ -82,6 +87,33 @@ public class StepTestServiceTests
 
             Assert.False(result.Success);
             Assert.Contains("未注册", result.Error ?? "");
+            Assert.NotEmpty(result.EvidenceJson);
+            Assert.True(result.DurationMs >= 0);
+            Assert.True(result.EndedAt >= result.StartedAt);
+        }
+        finally { Cleanup(dataDir); }
+    }
+
+    [Fact]
+    public async Task Step_Disabled_Returns_Error()
+    {
+        var dataDir = Path.Combine(Path.GetTempPath(), $"step_test_{Guid.NewGuid():N}");
+        try
+        {
+            var executors = new Dictionary<string, IActionStepExecutor>
+            {
+                ["some_step"] = new FakeStepExecutor("some_step", true)
+            };
+            var service = new StepTestService(executors);
+            var request = MakeRequest(new WorkflowStep { Index = 1, Type = "some_step", Enabled = false }, executors);
+
+            var result = await service.TestStepAsync(request);
+
+            Assert.False(result.Success);
+            Assert.Contains("已禁用", result.Error ?? "");
+            Assert.NotEmpty(result.EvidenceJson);
+            Assert.True(result.DurationMs >= 0);
+            Assert.True(result.EndedAt >= result.StartedAt);
         }
         finally { Cleanup(dataDir); }
     }
@@ -104,6 +136,8 @@ public class StepTestServiceTests
             Assert.False(result.Success);
             Assert.Contains("测试抛异常", result.Error ?? "");
             Assert.NotEmpty(result.EvidenceJson);
+            Assert.True(result.DurationMs >= 0);
+            Assert.True(result.EndedAt >= result.StartedAt);
         }
         finally { Cleanup(dataDir); }
     }
@@ -187,6 +221,9 @@ public class StepTestServiceTests
             Assert.True(result.UsedGlobalAutomationLock);
             Assert.Contains("global:automation", result.Error ?? "");
             Assert.True(result.NotVerified);
+            Assert.NotEmpty(result.EvidenceJson);
+            Assert.True(result.DurationMs >= 0);
+            Assert.True(result.EndedAt >= result.StartedAt);
         }
         finally
         {

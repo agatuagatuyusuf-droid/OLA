@@ -25,8 +25,11 @@ public class StepTestService : IStepTestService
             WorkflowId = request.Workflow.Id,
             StepName = $"{request.Step.Category}/{request.Step.Type}",
             StepType = request.Step.Type,
+            Success = true,
             StartedAt = DateTime.Now
         };
+
+        bool lockAcquired = false;
 
         try
         {
@@ -34,58 +37,59 @@ public class StepTestService : IStepTestService
             {
                 result.Success = false;
                 result.Error = "步骤已禁用";
-                return result;
             }
-
-            var executor = _executors.GetValueOrDefault(request.Step.Type);
-            if (executor == null)
+            else
             {
-                result.Success = false;
-                result.Error = $"未注册的步骤类型: {request.Step.Type}";
-                return result;
-            }
-
-            var requiresLock = AutomationActionClassifier.RequiresGlobalAutomationLock(request.Step);
-            result.UsedGlobalAutomationLock = requiresLock;
-
-            if (requiresLock && _lockService != null)
-            {
-                var acquired = _lockService.TryAcquire("global:automation", result.Id, request.LockWaitTimeout);
-                if (!acquired)
+                var executor = _executors.GetValueOrDefault(request.Step.Type);
+                if (executor == null)
                 {
                     result.Success = false;
-                    result.Error = "已有自动化流程正在控制鼠标/键盘/窗口，当前单步测试已跳过 (global:automation)";
-                    result.NotVerified = true;
-                    return result;
+                    result.Error = $"未注册的步骤类型: {request.Step.Type}";
                 }
-            }
-
-            try
-            {
-                var context = request.Context ?? new Dictionary<string, object?>();
-                var executionResult = await executor.ExecuteAsync(request.Step, context);
-                result.Success = executionResult.Success;
-                result.OutputData = executionResult.OutputData;
-                result.Error = executionResult.Error;
-                result.ScreenshotPath = executionResult.ScreenshotPath;
-
-                if (!result.Success)
+                else
                 {
-                    var evidencePath = CreateFailureEvidence(request.DataDir, request.Workflow, request.Step, result.Error);
-                    if (evidencePath != null && result.ScreenshotPath == null)
-                        result.ScreenshotPath = evidencePath;
+                    var requiresLock = AutomationActionClassifier.RequiresGlobalAutomationLock(request.Step);
+                    result.UsedGlobalAutomationLock = requiresLock;
+
+                    if (requiresLock && _lockService != null)
+                    {
+                        lockAcquired = _lockService.TryAcquire("global:automation", result.Id, request.LockWaitTimeout);
+                        if (!lockAcquired)
+                        {
+                            result.Success = false;
+                            result.Error = "已有自动化流程正在控制鼠标/键盘/窗口，当前单步测试已跳过 (global:automation)";
+                            result.NotVerified = true;
+                        }
+                    }
+
+                    if (result.Success)
+                    {
+                        var context = request.Context ?? new Dictionary<string, object?>();
+                        var executionResult = await executor.ExecuteAsync(request.Step, context);
+                        result.Success = executionResult.Success;
+                        result.OutputData = executionResult.OutputData;
+                        result.Error = executionResult.Error;
+                        result.ScreenshotPath = executionResult.ScreenshotPath;
+
+                        if (!result.Success)
+                        {
+                            var evidencePath = CreateFailureEvidence(request.DataDir, request.Workflow, request.Step, result.Error);
+                            if (evidencePath != null && result.ScreenshotPath == null)
+                                result.ScreenshotPath = evidencePath;
+                        }
+                    }
                 }
-            }
-            finally
-            {
-                if (requiresLock && _lockService != null)
-                    _lockService.Release(result.Id);
             }
         }
         catch (Exception ex)
         {
             result.Success = false;
             result.Error = ex.Message;
+        }
+        finally
+        {
+            if (lockAcquired)
+                _lockService?.Release(result.Id);
         }
 
         result.EndedAt = DateTime.Now;
