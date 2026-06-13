@@ -9,6 +9,12 @@ public class SelfCheckItem
     public string Status { get; set; } = "pending"; // pending, running, pass, fail, skip
     public string? Evidence { get; set; }
     public bool IsMock { get; set; }
+    public bool Verified { get; set; }
+    public bool NotVerified { get; set; }
+    public string? EvidenceJson { get; set; }
+    public string? RawResponse { get; set; }
+    public string? EvidenceFilePath { get; set; }
+    public DateTime CheckedAt { get; set; }
 
     public bool Passed => Status == "pass" || Status == "skip";
     public bool Failed => Status == "fail";

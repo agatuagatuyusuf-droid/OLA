@@ -3,6 +3,10 @@ using System.Runtime.InteropServices;
 namespace SkyAuto.Core.Ola;
 
 // Real OLA client - attempts to call actual OLA plugin DLL
+// WARNING: All OLA function names and signatures below are guesswork.
+// See docs/OLA_REAL_CALLING_RESEARCH.md for details.
+// No function has been verified against a real OLA DLL.
+// All results are marked NotVerified = true until verified with real DLL.
 public class OlaClient : IOlaClient
 {
     private readonly OlaRuntimeStatus _status = new();
@@ -63,7 +67,8 @@ public class OlaClient : IOlaClient
         if (!OlaNativeBridge.IsLoaded)
             return FailResult("test_connection", "OLA DLL未加载");
 
-        // Try calling ola_test_connection or ola_init
+        // NOTE: Function name 'ola_test_connection' is guesswork.
+        // Real OLA likely uses 'OLA_Init' or 'OLA_Connect' with different signature.
         var fn = OlaNativeBridge.GetOlaFunction("ola_test_connection")
                 ?? OlaNativeBridge.GetOlaFunction("ola_init");
 
@@ -80,8 +85,12 @@ public class OlaClient : IOlaClient
             {
                 Success = true,
                 FunctionKey = "test_connection",
-                Message = "OLA连接成功",
-                IsMock = false
+                Message = "OLA DLL函数调用成功(函数名/签名未经真实OLA验证)",
+                IsMock = false,
+                NotVerified = true,
+                Verified = false,
+                VerifyMessage = "函数名和签名均为猜测，未在真实OLA DLL上验证",
+                RawResponse = retCode.ToString()
             };
         }
         catch (Exception ex)
@@ -95,14 +104,12 @@ public class OlaClient : IOlaClient
         if (!OlaNativeBridge.IsLoaded)
             return FailResult(functionKey, "OLA DLL未加载");
 
-        // Map the function key to OLA's exported function name (e.g., ola_xxx)
         var functionName = $"ola_{functionKey.Replace("_", "_")}";
 
         var fn = OlaNativeBridge.GetOlaFunction(functionName);
         if (fn == null)
             return FailResult(functionKey, $"OLA DLL中未找到函数: {functionName}");
 
-        // Serialize parameters to a string the OLA function expects
         var paramStr = System.Text.Json.JsonSerializer.Serialize(parameters ?? new());
 
         try
@@ -111,14 +118,17 @@ public class OlaClient : IOlaClient
             if (retCode < 0)
                 return FailResult(functionKey, $"OLA返回错误码: {retCode}");
 
-            // The OLA function might set a global result buffer; simplified for now
             return new OlaCallResult
             {
                 Success = true,
                 FunctionKey = functionKey,
-                Message = "执行成功",
+                Message = "执行成功(函数名/签名未经真实OLA验证)",
                 RawResult = retCode.ToString(),
-                IsMock = false
+                IsMock = false,
+                NotVerified = true,
+                Verified = false,
+                VerifyMessage = "通用Call方法的函数名和签名为猜测",
+                RawResponse = retCode.ToString()
             };
         }
         catch (Exception ex)
@@ -146,7 +156,11 @@ public class OlaClient : IOlaClient
                 FunctionKey = "get_machine_code",
                 Message = $"机器码: {_status.MachineCode}",
                 Data = retCode,
-                IsMock = false
+                IsMock = false,
+                NotVerified = true,
+                Verified = false,
+                VerifyMessage = "函数名和返回值为猜测：机器码可能不是整数返回码",
+                RawResponse = retCode.ToString()
             };
         }
         catch (Exception ex)
@@ -175,7 +189,12 @@ public class OlaClient : IOlaClient
                 Success = true,
                 FunctionKey = "capture_screen",
                 Message = $"截图已保存到: {savePath}",
-                IsMock = false
+                IsMock = false,
+                NotVerified = true,
+                Verified = false,
+                VerifyMessage = "函数名和签名为猜测，未验证截图文件是否真实创建",
+                RawResponse = retCode.ToString(),
+                ScreenshotPath = savePath
             };
         }
         catch (Exception ex)
@@ -227,9 +246,13 @@ public class OlaClient : IOlaClient
             {
                 Success = true,
                 FunctionKey = "find_image",
-                Message = $"找到图片: {imagePath}",
+                Message = $"找到图片(未经真实OLA验证): {imagePath}",
                 RawResult = retCode.ToString(),
-                IsMock = false
+                IsMock = false,
+                NotVerified = true,
+                Verified = false,
+                VerifyMessage = "函数名和签名为猜测，未验证是否返回真实坐标",
+                RawResponse = retCode.ToString()
             };
         }
         catch (Exception ex)
@@ -352,19 +375,27 @@ public class OlaClient : IOlaClient
             if (retCode < 0)
                 return FailResult(functionKey, $"OLA返回错误码: {retCode}");
 
-            return new OlaCallResult
-            {
-                Success = true,
-                FunctionKey = functionKey,
-                Message = "执行成功",
-                RawResult = retCode.ToString(),
-                IsMock = false
-            };
+            return NotVerifiedResult(functionKey, $"执行成功 (函数名/签名未经真实OLA验证)", retCode.ToString());
         }
         catch (Exception ex)
         {
             return FailResult(functionKey, $"调用异常: {ex.Message}");
         }
+    }
+
+    private OlaCallResult NotVerifiedResult(string functionKey, string message, string rawResponse)
+    {
+        return new OlaCallResult
+        {
+            Success = true,
+            FunctionKey = functionKey,
+            Message = message,
+            NotVerified = true,
+            Verified = false,
+            VerifyMessage = "函数名和签名均为猜测，未在真实OLA DLL上验证",
+            RawResponse = rawResponse,
+            IsMock = false
+        };
     }
 
     private OlaCallResult FailResult(string functionKey, string message)
@@ -376,7 +407,10 @@ public class OlaClient : IOlaClient
             FunctionKey = functionKey,
             Message = message,
             ErrorCode = "OLA_ERROR",
-            IsMock = false
+            IsMock = false,
+            NotVerified = true,
+            Verified = false,
+            VerifyMessage = "函数名和签名为猜测，调用失败"
         };
     }
 

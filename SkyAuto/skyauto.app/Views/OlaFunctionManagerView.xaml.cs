@@ -81,10 +81,11 @@ public partial class OlaFunctionManagerView : UserControl
                         RawFunctionName = $"ola_{func.Type}",
                         ParametersJson = System.Text.Json.JsonSerializer.Serialize(func.Parameters),
                         Implemented = true,
-                        RealOlaConnected = result.Success && !result.IsMock,
+                        RealOlaConnected = result.Success && !result.IsMock && !result.NotVerified,
                         Tested = true,
-                        TestStatus = (result.Success && !result.IsMock) ? "real_pass" : "real_fail",
-                        TestMessage = result.Message ?? "",
+                        TestStatus = (result.Success && !result.IsMock && !result.NotVerified) ? "real_pass" : 
+                                     (result.Success && !result.IsMock && result.NotVerified) ? "not_verified" : "real_fail",
+                        TestMessage = result.NotVerified ? $"(未验证) {result.Message}" : (result.Message ?? ""),
                         LastTestedAt = DateTime.Now
                     };
                     _store.SaveOlaFunctionStatus(record);

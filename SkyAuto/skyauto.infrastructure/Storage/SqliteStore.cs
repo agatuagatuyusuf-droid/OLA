@@ -288,7 +288,7 @@ public class SqliteStore : IWorkflowStore, IAssetStore, IScheduleStore, IRunReco
     public string GetSetting(string key)
     {
         using var conn = CreateConnection();
-        return conn.QuerySingleOrDefault<string>("SELECT value FROM settings WHERE @Key", new { Key = key }) ?? "";
+        return conn.QuerySingleOrDefault<string>("SELECT value FROM settings WHERE key = @Key", new { Key = key }) ?? "";
     }
 
     public void SaveSetting(string key, string value)

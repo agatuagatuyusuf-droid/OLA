@@ -6,6 +6,7 @@ using SkyAuto.Infrastructure.Logging;
 using SkyAuto.Infrastructure.Scheduling;
 using SkyAuto.Infrastructure.Storage;
 using SkyAuto.Core.Steps.SystemSteps;
+using System.Text.Json;
 
 namespace SkyAuto.Infrastructure.SelfCheck;
 
@@ -47,37 +48,92 @@ public class SelfChecker
             var mode = _olaClient.Mode;
             bool isReal = mode == OlaConnectionMode.Real && _olaClient.Status.Initialized;
 
-            CheckAndAdd(checks, "CHECK_031", $"OLA连接模式: {(mode switch { OlaConnectionMode.Real => "Real", OlaConnectionMode.Mock => "Mock", _ => "NotConfigured" })}",
-                "真实OLA", 3, () => IsOlaModeCorrect(mode), isMock: mode == OlaConnectionMode.Mock);
+            // CHECK_031: connection mode info
+            AddCheckWithEvidence(checks, "CHECK_031", "OLA连接模式: " + (mode switch
+            {
+                OlaConnectionMode.Real => "Real",
+                OlaConnectionMode.Mock => "Mock",
+                _ => "NotConfigured"
+            }), "真实OLA", 3, () =>
+            {
+                var result = new OlaCallResult
+                {
+                    Success = isReal,
+                    FunctionKey = "mode_check",
+                    Message = "Mode: " + mode,
+                    IsMock = mode == OlaConnectionMode.Mock,
+                    Verified = isReal,
+                    NotVerified = !isReal,
+                    VerifyMessage = isReal ? "Real模式" : "非Real模式"
+                };
+                result.Evidence["mode"] = mode.ToString();
+                return result;
+            });
 
             if (isReal)
             {
-                CheckAndAdd(checks, "CHECK_032", "OLA测试连接成功(Real)", "真实OLA", 3, () => CanOlaTestConnection());
-                CheckAndAdd(checks, "CHECK_033", "OLA获取机器码成功(Real)", "真实OLA", 3, () => CanOlaGetMachineCode());
-                CheckAndAdd(checks, "CHECK_034", "OLA截图功能可用(Real)", "真实OLA", 3, () => CanOlaCaptureScreen());
-                CheckAndAdd(checks, "CHECK_035", "OLA鼠标移动可用(Real)", "真实OLA", 3, () => CanOlaMoveMouse());
-                CheckAndAdd(checks, "CHECK_036", "OLA找图接口可调用(Real)", "真实OLA", 3, () => CanOlaFindImage());
-                CheckAndAdd(checks, "CHECK_037", "OLAOcr区域识别可用(Real)", "真实OLA", 3, () => CanOlaOcrRegion());
+                // Real mode - use OlaClient with OlaCallVerifier
+                AddCheckWithEvidence(checks, "CHECK_032", "OLA测试连接(Real)", "真实OLA", 3, () =>
+                {
+                    var raw = _olaClient.TestConnection();
+                    return OlaCallVerifier.VerifyConnection(raw);
+                });
+
+                AddCheckWithEvidence(checks, "CHECK_033", "OLA获取机器码(Real)", "真实OLA", 3, () =>
+                {
+                    var raw = _olaClient.GetMachineCode();
+                    return OlaCallVerifier.VerifyMachineCode(raw);
+                });
+
+                // CHECK_034: CaptureScreen with verifier
+                AddCheckWithEvidence(checks, "CHECK_034", "OLA截图功能(Real)", "真实OLA", 3, () =>
+                {
+                    var path = Path.Combine(_dataDir, "screenshots", $"selfcheck_{DateTime.Now:yyyyMMddHHmmss}.bmp");
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    var raw = _olaClient.CaptureScreen(path);
+                    return OlaCallVerifier.VerifyCaptureScreen(raw, path);
+                });
+
+                // CHECK_035: MoveMouse with verifier
+                AddCheckWithEvidence(checks, "CHECK_035", "OLA鼠标移动(Real)", "真实OLA", 3, () =>
+                {
+                    var raw = _olaClient.MoveMouse(100, 100);
+                    return OlaCallVerifier.VerifyMoveMouse(raw, 100, 100);
+                });
+
+                // CHECK_036: FindImage with verifier
+                AddCheckWithEvidence(checks, "CHECK_036", "OLA找图接口(Real)", "真实OLA", 3, () =>
+                {
+                    var raw = _olaClient.FindImage("selfcheck_test.png", 0.85);
+                    return OlaCallVerifier.VerifyFindImage(raw, "selfcheck_test.png", 0.85);
+                });
+
+                // CHECK_037: OcrRegion with verifier
+                AddCheckWithEvidence(checks, "CHECK_037", "OLA OCR区域识别(Real)", "真实OLA", 3, () =>
+                {
+                    var raw = _olaClient.OcrRegion(0, 0, 200, 100);
+                    return OlaCallVerifier.VerifyOcrRegion(raw, 0, 0, 200, 100);
+                });
             }
             else if (mode == OlaConnectionMode.Mock)
             {
-                // Mock mode - these checks explicitly FAIL because Mock != Real
-                AddOlaMockCheck(checks, "CHECK_032", "OLA测试连接(Real)", "真实OLA", "当前为Mock模式，非真实OLA");
-                AddOlaMockCheck(checks, "CHECK_033", "OLA获取机器码(Real)", "真实OLA", "当前为Mock模式，非真实OLA");
-                AddOlaMockCheck(checks, "CHECK_034", "OLA截图功能(Real)", "真实OLA", "当前为Mock模式，非真实OLA");
-                AddOlaMockCheck(checks, "CHECK_035", "OLA鼠标移动(Real)", "真实OLA", "当前为Mock模式，非真实OLA");
-                AddOlaMockCheck(checks, "CHECK_036", "OLA找图接口(Real)", "真实OLA", "当前为Mock模式，非真实OLA");
-                AddOlaMockCheck(checks, "CHECK_037", "OLAOcr识别(Real)", "真实OLA", "当前为Mock模式，非真实OLA");
+                // Mock mode - these checks explicitly FAIL with structured evidence
+                AddMockFailEvidence(checks, "CHECK_032", "OLA测试连接(Real)", "真实OLA", "当前为Mock模式，非真实OLA");
+                AddMockFailEvidence(checks, "CHECK_033", "OLA获取机器码(Real)", "真实OLA", "当前为Mock模式，非真实OLA");
+                AddMockFailEvidence(checks, "CHECK_034", "OLA截图功能(Real)", "真实OLA", "当前为Mock模式，非真实OLA");
+                AddMockFailEvidence(checks, "CHECK_035", "OLA鼠标移动(Real)", "真实OLA", "当前为Mock模式，非真实OLA");
+                AddMockFailEvidence(checks, "CHECK_036", "OLA找图接口(Real)", "真实OLA", "当前为Mock模式，非真实OLA");
+                AddMockFailEvidence(checks, "CHECK_037", "OLAOcr识别(Real)", "真实OLA", "当前为Mock模式，非真实OLA");
             }
             else
             {
                 // NotConfigured - fail with reason
-                AddOlaMockCheck(checks, "CHECK_032", "OLA测试连接(Real)", "真实OLA", "OLA未配置");
-                AddOlaMockCheck(checks, "CHECK_033", "OLA获取机器码(Real)", "真实OLA", "OLA未配置");
-                AddOlaMockCheck(checks, "CHECK_034", "OLA截图功能(Real)", "真实OLA", "OLA未配置");
-                AddOlaMockCheck(checks, "CHECK_035", "OLA鼠标移动(Real)", "真实OLA", "OLA未配置");
-                AddOlaMockCheck(checks, "CHECK_036", "OLA找图接口(Real)", "真实OLA", "OLA未配置");
-                AddOlaMockCheck(checks, "CHECK_037", "OLAOcr识别(Real)", "真实OLA", "OLA未配置");
+                AddMockFailEvidence(checks, "CHECK_032", "OLA测试连接(Real)", "真实OLA", "OLA未配置");
+                AddMockFailEvidence(checks, "CHECK_033", "OLA获取机器码(Real)", "真实OLA", "OLA未配置");
+                AddMockFailEvidence(checks, "CHECK_034", "OLA截图功能(Real)", "真实OLA", "OLA未配置");
+                AddMockFailEvidence(checks, "CHECK_035", "OLA鼠标移动(Real)", "真实OLA", "OLA未配置");
+                AddMockFailEvidence(checks, "CHECK_036", "OLA找图接口(Real)", "真实OLA", "OLA未配置");
+                AddMockFailEvidence(checks, "CHECK_037", "OLAOcr识别(Real)", "真实OLA", "OLA未配置");
             }
         }
 
@@ -144,8 +200,20 @@ public class SelfChecker
         list.Add(item);
     }
 
-    private void AddOlaMockCheck(List<SelfCheckItem> list, string id, string name, string category, string reason)
+    private void AddMockFailEvidence(List<SelfCheckItem> list, string id, string name, string category, string reason)
     {
+        var result = new OlaCallResult
+        {
+            Success = false,
+            FunctionKey = id,
+            Message = reason,
+            IsMock = false,
+            Verified = false,
+            NotVerified = true,
+            VerifyMessage = reason
+        };
+        result.Evidence["reason"] = reason;
+
         list.Add(new SelfCheckItem
         {
             Id = id,
@@ -154,8 +222,57 @@ public class SelfChecker
             Level = 3,
             Status = "fail",
             Evidence = reason,
-            IsMock = false
+            IsMock = false,
+            Verified = false,
+            NotVerified = true,
+            EvidenceJson = result.ToEvidenceJson(),
+            CheckedAt = DateTime.Now
         });
+    }
+
+    private void AddCheckWithEvidence(List<SelfCheckItem> list, string id, string name, string category, int level, Func<OlaCallResult> check)
+    {
+        var item = new SelfCheckItem
+        {
+            Id = id,
+            Name = name,
+            Category = category,
+            Level = level,
+            Status = "running",
+            IsMock = false,
+            CheckedAt = DateTime.Now
+        };
+
+        try
+        {
+            var result = check();
+            item.IsMock = result.IsMock;
+            item.Verified = result.Verified;
+            item.NotVerified = result.NotVerified;
+            item.RawResponse = result.RawResponse;
+            item.EvidenceJson = result.ToEvidenceJson();
+            item.EvidenceFilePath = result.ScreenshotPath;
+            item.Evidence = result.VerifyMessage;
+
+            bool passed = result.Success && result.Verified && !result.IsMock && !result.NotVerified;
+            item.Status = passed ? "pass" : "fail";
+        }
+        catch (Exception ex)
+        {
+            item.Status = "fail";
+            item.Evidence = $"异常: {ex.Message}";
+            item.EvidenceJson = JsonSerializer.Serialize(new
+            {
+                id,
+                name,
+                category,
+                status = "fail",
+                error = ex.Message,
+                timestamp = DateTime.Now.ToString("o")
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+
+        list.Add(item);
     }
 
     private void UiCheckAndAdd(List<SelfCheckItem> list, string id, string name, string category, int level, Func<bool> check, bool assemblyAvailable)
@@ -367,85 +484,6 @@ public class SelfChecker
         {
             var registry = OlaFunctionRegistry.CreateDefault();
             return registry.GetCategories().Count >= 5;
-        }
-        catch { return false; }
-    }
-
-    // ===== Level 3: Real OLA checks =====
-
-    private bool IsOlaModeCorrect(OlaConnectionMode mode)
-    {
-        // Mode check just verifies the current mode is what we expect (any non-null mode is valid)
-        return true;
-    }
-
-    private bool CanOlaTestConnection()
-    {
-        if (_olaClient == null || _olaClient.Mode != OlaConnectionMode.Real) return false;
-        try
-        {
-            var result = _olaClient.TestConnection();
-            // Must be non-mock success
-            return result.Success && !result.IsMock;
-        }
-        catch { return false; }
-    }
-
-    private bool CanOlaGetMachineCode()
-    {
-        if (_olaClient == null || _olaClient.Mode != OlaConnectionMode.Real) return false;
-        try
-        {
-            var result = _olaClient.GetMachineCode();
-            return result.Success && !result.IsMock && !string.IsNullOrEmpty(result.Data?.ToString());
-        }
-        catch { return false; }
-    }
-
-    private bool CanOlaCaptureScreen()
-    {
-        if (_olaClient == null || _olaClient.Mode != OlaConnectionMode.Real) return false;
-        try
-        {
-            var path = Path.Combine(_dataDir, "screenshots", $"selfcheck_{DateTime.Now:yyyyMMddHHmmss}.bmp");
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            var result = _olaClient.CaptureScreen(path);
-            return result.Success && !result.IsMock;
-        }
-        catch { return false; }
-    }
-
-    private bool CanOlaMoveMouse()
-    {
-        if (_olaClient == null || _olaClient.Mode != OlaConnectionMode.Real) return false;
-        try
-        {
-            var result = _olaClient.MoveMouse(100, 100);
-            return result.Success && !result.IsMock;
-        }
-        catch { return false; }
-    }
-
-    private bool CanOlaFindImage()
-    {
-        if (_olaClient == null || _olaClient.Mode != OlaConnectionMode.Real) return false;
-        try
-        {
-            // Use a small test image or just verify the API call doesn't throw
-            var result = _olaClient.FindImage("test.png", 0.85);
-            // Even if not found, as long as it's a non-mock response it's OK
-            return !result.IsMock;
-        }
-        catch { return false; }
-    }
-
-    private bool CanOlaOcrRegion()
-    {
-        if (_olaClient == null || _olaClient.Mode != OlaConnectionMode.Real) return false;
-        try
-        {
-            var result = _olaClient.OcrRegion(0, 0, 200, 100);
-            return !result.IsMock;
         }
         catch { return false; }
     }

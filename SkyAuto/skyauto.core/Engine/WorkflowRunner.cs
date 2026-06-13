@@ -39,51 +39,76 @@ public class WorkflowRunner
             }
         }
 
+        var allSuccess = true;
+
         try
         {
             var context = new Dictionary<string, object?>(workflow.Variables);
 
             foreach (var step in workflow.Steps)
-        {
-            if (!step.Enabled) continue;
-
-            var stepRecord = new RunStepRecord
             {
-                Index = step.Index,
-                StepName = $"{step.Category}/{step.Type}",
-                StartTime = DateTime.Now
-            };
+                if (!step.Enabled) continue;
 
-            try
-            {
-                var executor = _executors.GetValueOrDefault(step.Type);
-                if (executor == null)
-                    throw new InvalidOperationException($"未注册的步骤类型: {step.Type}");
-
-                int attempts = 0;
-                StepExecutionResult result;
-
-                do
+                var stepRecord = new RunStepRecord
                 {
-                    attempts++;
-                    result = await executor.ExecuteAsync(step, context);
+                    Index = step.Index,
+                    StepName = $"{step.Category}/{step.Type}",
+                    StartTime = DateTime.Now
+                };
 
-                    if (result.Success || attempts > step.RetryCount) break;
-                } while (true);
-
-                stepRecord.EndTime = DateTime.Now;
-                stepRecord.Success = result.Success;
-                stepRecord.OutputData = result.OutputData;
-                stepRecord.Error = result.Error;
-                stepRecord.ScreenshotPath = result.ScreenshotPath;
-
-                if (!result.Success)
+                try
                 {
-                    record.Success = false;
+                    var executor = _executors.GetValueOrDefault(step.Type);
+                    if (executor == null)
+                        throw new InvalidOperationException($"未注册的步骤类型: {step.Type}");
+
+                    int attempts = 0;
+                    StepExecutionResult result;
+
+                    do
+                    {
+                        attempts++;
+                        result = await executor.ExecuteAsync(step, context);
+
+                        if (result.Success || attempts > step.RetryCount) break;
+                    } while (true);
+
+                    stepRecord.EndTime = DateTime.Now;
+                    stepRecord.Success = result.Success;
+                    stepRecord.OutputData = result.OutputData;
+                    stepRecord.Error = result.Error;
+                    stepRecord.ScreenshotPath = result.ScreenshotPath;
+
+                    if (!result.Success)
+                    {
+                        allSuccess = false;
+                        record.FailedStepName = stepRecord.StepName;
+                        record.ErrorMessage = result.Error ?? "步骤执行失败";
+
+                        try
+                        {
+                            var screenshot = TakeScreenshot(workflow.Name, step.Type);
+                            if (!string.IsNullOrEmpty(screenshot))
+                            {
+                                record.ScreenshotPath = screenshot;
+                                stepRecord.ScreenshotPath = screenshot;
+                            }
+                        }
+                        catch { }
+
+                        break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    stepRecord.EndTime = DateTime.Now;
+                    stepRecord.Success = false;
+                    stepRecord.Error = ex.Message;
+
+                    allSuccess = false;
                     record.FailedStepName = stepRecord.StepName;
-                    record.ErrorMessage = result.Error ?? "步骤执行失败";
-                    
-                    // Auto-screenshot on failure
+                    record.ErrorMessage = ex.Message;
+
                     try
                     {
                         var screenshot = TakeScreenshot(workflow.Name, step.Type);
@@ -93,43 +118,16 @@ public class WorkflowRunner
                             stepRecord.ScreenshotPath = screenshot;
                         }
                     }
-                    catch { /* screenshot failed - non-critical */ }
+                    catch { }
 
                     break;
                 }
-            }
-            catch (Exception ex)
-            {
-                stepRecord.EndTime = DateTime.Now;
-                stepRecord.Success = false;
-                stepRecord.Error = ex.Message;
 
-                record.Success = false;
-                record.FailedStepName = stepRecord.StepName;
-                record.ErrorMessage = ex.Message;
-
-                // Auto-screenshot on exception
-                try
-                {
-                    var screenshot = TakeScreenshot(workflow.Name, step.Type);
-                    if (!string.IsNullOrEmpty(screenshot))
-                    {
-                        record.ScreenshotPath = screenshot;
-                        stepRecord.ScreenshotPath = screenshot;
-                    }
-                }
-                catch { /* screenshot failed - non-critical */ }
-
-                break;
+                record.StepRecords.Add(stepRecord);
             }
 
-            record.StepRecords.Add(stepRecord);
-        }
-
-        record.EndTime = DateTime.Now;
-
-            // Set success to true since no failures occurred during execution
-            record.Success = true;
+            record.EndTime = DateTime.Now;
+            record.Success = allSuccess;
 
             return record;
         }
