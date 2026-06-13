@@ -25,17 +25,36 @@ public class WorkflowRunner
             StartTime = DateTime.Now
         };
 
-        // Acquire lock to prevent concurrent execution of the same workflow
+        // Acquire locks: workflow-level + global automation if needed
         if (_lockService != null)
         {
-            var acquired = _lockService.TryAcquire(workflow.Id, record.Id, waitForTimeout);
-            if (!acquired)
+            var workflowLockKey = $"workflow:{workflow.Id}";
+            var acquiredWorkflowLock = _lockService.TryAcquire(workflowLockKey, record.Id, waitForTimeout);
+
+            if (!acquiredWorkflowLock)
             {
                 record.Success = false;
                 record.ErrorMessage = $"流程正在运行中，无法重复启动 (workflow: {workflow.Name})";
-                record.FailedStepName = "LOCK_FAILED";
+                record.FailedStepName = "WORKFLOW_LOCK_FAILED";
                 record.EndTime = DateTime.Now;
                 return record;
+            }
+
+            if (AutomationActionClassifier.RequiresGlobalAutomationLock(workflow))
+            {
+                var acquiredGlobalLock = _lockService.TryAcquire("global:automation", record.Id, waitForTimeout);
+
+                if (!acquiredGlobalLock)
+                {
+                    record.Success = false;
+                    record.ErrorMessage = "已有自动化流程正在控制鼠标/键盘/窗口，当前流程已跳过 (global:automation)";
+                    record.FailedStepName = "GLOBAL_AUTOMATION_LOCK_FAILED";
+                    record.EndTime = DateTime.Now;
+
+                    _lockService.Release(record.Id);
+
+                    return record;
+                }
             }
         }
 
@@ -55,6 +74,8 @@ public class WorkflowRunner
                     StepName = $"{step.Category}/{step.Type}",
                     StartTime = DateTime.Now
                 };
+
+                bool shouldStop = false;
 
                 try
                 {
@@ -82,6 +103,8 @@ public class WorkflowRunner
                     if (!result.Success)
                     {
                         allSuccess = false;
+                        shouldStop = true;
+
                         record.FailedStepName = stepRecord.StepName;
                         record.ErrorMessage = result.Error ?? "步骤执行失败";
 
@@ -95,17 +118,17 @@ public class WorkflowRunner
                             }
                         }
                         catch { }
-
-                        break;
                     }
                 }
                 catch (Exception ex)
                 {
+                    allSuccess = false;
+                    shouldStop = true;
+
                     stepRecord.EndTime = DateTime.Now;
                     stepRecord.Success = false;
                     stepRecord.Error = ex.Message;
 
-                    allSuccess = false;
                     record.FailedStepName = stepRecord.StepName;
                     record.ErrorMessage = ex.Message;
 
@@ -119,11 +142,12 @@ public class WorkflowRunner
                         }
                     }
                     catch { }
-
-                    break;
                 }
 
                 record.StepRecords.Add(stepRecord);
+
+                if (shouldStop)
+                    break;
             }
 
             record.EndTime = DateTime.Now;

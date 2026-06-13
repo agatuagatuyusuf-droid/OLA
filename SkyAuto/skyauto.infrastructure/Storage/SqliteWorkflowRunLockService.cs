@@ -30,9 +30,14 @@ public class SqliteWorkflowRunLockService : IWorkflowRunLockService
             using var conn = CreateConnection();
             conn.Open();
 
+            var selectSql = @"
+                SELECT lock_key AS LockKey, owner_run_id AS OwnerRunId, 
+                       acquired_at AS AcquiredAt, expires_at AS ExpiresAt 
+                FROM runtime_locks WHERE lock_key = @LockKey";
+
             // Check if there's an existing lock for this workflow
             var existingLock = conn.QueryFirstOrDefault<RuntimeLockInfo>(
-                "SELECT * FROM runtime_locks WHERE lock_key = @LockKey", new { LockKey = workflowId });
+                selectSql, new { LockKey = workflowId });
 
             if (existingLock == null || existingLock.IsExpired)
             {
@@ -49,7 +54,7 @@ public class SqliteWorkflowRunLockService : IWorkflowRunLockService
 
                 // Double-check: someone might have acquired it between our check and insert
                 var verify = conn.QueryFirstOrDefault<RuntimeLockInfo>(
-                    "SELECT * FROM runtime_locks WHERE lock_key = @LockKey", new { LockKey = workflowId });
+                    selectSql, new { LockKey = workflowId });
 
                 if (verify != null && verify.OwnerRunId == runId)
                     return true;
@@ -85,7 +90,7 @@ public class SqliteWorkflowRunLockService : IWorkflowRunLockService
         using var conn = CreateConnection();
         conn.Open();
         var lockInfo = conn.QueryFirstOrDefault<RuntimeLockInfo>(
-            "SELECT * FROM runtime_locks WHERE lock_key = @LockKey", new { LockKey = workflowId });
+            "SELECT lock_key AS LockKey, owner_run_id AS OwnerRunId, acquired_at AS AcquiredAt, expires_at AS ExpiresAt FROM runtime_locks WHERE lock_key = @LockKey", new { LockKey = workflowId });
 
         return lockInfo != null && !lockInfo.IsExpired;
     }
@@ -95,7 +100,7 @@ public class SqliteWorkflowRunLockService : IWorkflowRunLockService
         using var conn = CreateConnection();
         conn.Open();
         return conn.QueryFirstOrDefault<RuntimeLockInfo>(
-            "SELECT * FROM runtime_locks WHERE lock_key = @LockKey", new { LockKey = workflowId });
+            "SELECT lock_key AS LockKey, owner_run_id AS OwnerRunId, acquired_at AS AcquiredAt, expires_at AS ExpiresAt FROM runtime_locks WHERE lock_key = @LockKey", new { LockKey = workflowId });
     }
 
     public int CleanupExpiredLocks()

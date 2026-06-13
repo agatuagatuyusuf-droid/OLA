@@ -38,6 +38,24 @@ public class WorkflowRunnerFailureTests
             => throw new InvalidOperationException("Executor抛异常");
     }
 
+    /// <summary>
+    /// An executor that counts invocations for verifying execution order.
+    /// </summary>
+    public class CountingExecutor : IActionStepExecutor
+    {
+        public int ExecutionCount { get; private set; }
+        public string Type => "counting";
+        public bool ShouldSucceed { get; set; } = true;
+
+        public Task<StepExecutionResult> ExecuteAsync(WorkflowStep step, Dictionary<string, object?>? context = null)
+        {
+            ExecutionCount++;
+            return Task.FromResult(ShouldSucceed
+                ? new StepExecutionResult { Success = true, OutputData = "ok" }
+                : new StepExecutionResult { Success = false, Error = "故意失败" });
+        }
+    }
+
     private static WorkflowRunner CreateRunner(string dataDir, Dictionary<string, IActionStepExecutor> executors)
         => new(executors, dataDir);
 
@@ -246,6 +264,159 @@ public class WorkflowRunnerFailureTests
 
             Assert.True(record.Success, "空流程(0步骤) Success 应为 true");
             Assert.Empty(record.StepRecords);
+        }
+        finally
+        {
+            try { Directory.Delete(dataDir, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Failed_Step_Is_Recorded_In_StepRecords()
+    {
+        var dataDir = Path.Combine(Path.GetTempPath(), $"runner_test_{Guid.NewGuid():N}");
+        try
+        {
+            var executors = new Dictionary<string, IActionStepExecutor>
+            {
+                ["success"] = new SuccessExecutor(),
+                ["fail"] = new FailExecutor()
+            };
+            var runner = CreateRunner(dataDir, executors);
+            var wf = new Workflow
+            {
+                Name = "失败步骤记录测试",
+                Steps =
+                {
+                    new WorkflowStep { Index = 1, Type = "success", Enabled = true },
+                    new WorkflowStep { Index = 2, Type = "fail", Enabled = true },
+                    new WorkflowStep { Index = 3, Type = "success", Enabled = true }
+                }
+            };
+
+            var record = runner.RunAsync(wf).Result;
+
+            Assert.False(record.Success);
+            Assert.Equal(2, record.StepRecords.Count);
+            Assert.True(record.StepRecords[0].Success);
+            Assert.False(record.StepRecords[1].Success);
+            Assert.Contains("fail", record.StepRecords[1].StepName);
+            Assert.Contains("故意失败", record.StepRecords[1].Error ?? "");
+        }
+        finally
+        {
+            try { Directory.Delete(dataDir, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Exception_Step_Is_Recorded_In_StepRecords()
+    {
+        var dataDir = Path.Combine(Path.GetTempPath(), $"runner_test_{Guid.NewGuid():N}");
+        try
+        {
+            var executors = new Dictionary<string, IActionStepExecutor>
+            {
+                ["success"] = new SuccessExecutor(),
+                ["throw"] = new ThrowExecutor()
+            };
+            var runner = CreateRunner(dataDir, executors);
+            var wf = new Workflow
+            {
+                Name = "异常步骤记录测试",
+                Steps =
+                {
+                    new WorkflowStep { Index = 1, Type = "success", Enabled = true },
+                    new WorkflowStep { Index = 2, Type = "throw", Enabled = true },
+                    new WorkflowStep { Index = 3, Type = "success", Enabled = true }
+                }
+            };
+
+            var record = runner.RunAsync(wf).Result;
+
+            Assert.False(record.Success);
+            Assert.Equal(2, record.StepRecords.Count);
+            Assert.True(record.StepRecords[0].Success);
+            Assert.False(record.StepRecords[1].Success);
+            Assert.Contains("throw", record.StepRecords[1].StepName);
+            Assert.Contains("Executor抛异常", record.StepRecords[1].Error ?? "");
+        }
+        finally
+        {
+            try { Directory.Delete(dataDir, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Failure_Stops_Subsequent_Steps_From_Executing()
+    {
+        var dataDir = Path.Combine(Path.GetTempPath(), $"runner_test_{Guid.NewGuid():N}");
+        try
+        {
+            var counting = new CountingExecutor();
+            var executors = new Dictionary<string, IActionStepExecutor>
+            {
+                ["success"] = new SuccessExecutor(),
+                ["fail"] = new FailExecutor(),
+                ["counting"] = counting
+            };
+            var runner = CreateRunner(dataDir, executors);
+            var wf = new Workflow
+            {
+                Name = "失败后停止后续测试",
+                Steps =
+                {
+                    new WorkflowStep { Index = 1, Type = "success", Enabled = true },
+                    new WorkflowStep { Index = 2, Type = "fail", Enabled = true },
+                    new WorkflowStep { Index = 3, Type = "counting", Enabled = true }
+                }
+            };
+
+            var record = runner.RunAsync(wf).Result;
+
+            Assert.False(record.Success);
+            Assert.Equal(2, record.StepRecords.Count);
+            Assert.Equal(0, counting.ExecutionCount);
+        }
+        finally
+        {
+            try { Directory.Delete(dataDir, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Failed_Step_Has_Screenshot_Or_Evidence()
+    {
+        var dataDir = Path.Combine(Path.GetTempPath(), $"runner_test_{Guid.NewGuid():N}");
+        try
+        {
+            var executors = new Dictionary<string, IActionStepExecutor>
+            {
+                ["fail"] = new FailExecutor()
+            };
+            var runner = CreateRunner(dataDir, executors);
+            var wf = new Workflow
+            {
+                Name = "失败证据测试",
+                Steps =
+                {
+                    new WorkflowStep { Index = 1, Type = "fail", Enabled = true }
+                }
+            };
+
+            var record = runner.RunAsync(wf).Result;
+
+            Assert.False(record.Success);
+            Assert.Equal(1, record.StepRecords.Count);
+            Assert.False(record.StepRecords[0].Success);
+
+            var screenshotDir = Path.Combine(dataDir, "screenshots");
+            if (Directory.Exists(screenshotDir))
+            {
+                var evidenceFiles = Directory.GetFiles(screenshotDir, "*fail*");
+                Assert.True(evidenceFiles.Length > 0 || record.ScreenshotPath != null,
+                    "失败步骤应有截图或证据文件");
+            }
         }
         finally
         {
