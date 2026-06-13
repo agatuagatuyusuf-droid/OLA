@@ -105,10 +105,42 @@ CREATE TABLE IF NOT EXISTS runtime_locks (
     owner_run_id TEXT,
     acquired_at TEXT,
     expires_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS workflow_variables (
+    id TEXT PRIMARY KEY,
+    workflow_id TEXT,
+    name TEXT NOT NULL,
+    key TEXT NOT NULL,
+    type TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    default_value TEXT,
+    required INTEGER DEFAULT 0,
+    is_secret INTEGER DEFAULT 0,
+    description TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS variable_values (
+    id TEXT PRIMARY KEY,
+    variable_id TEXT NOT NULL,
+    workflow_id TEXT,
+    run_id TEXT,
+    step_id TEXT,
+    value TEXT,
+    is_encrypted INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );");
 
         conn.Execute("CREATE INDEX IF NOT EXISTS idx_run_records_workflow_id ON run_records(workflow_id)");
         conn.Execute("CREATE INDEX IF NOT EXISTS idx_schedules_workflow_id ON schedules(workflow_id)");
         conn.Execute("CREATE INDEX IF NOT EXISTS idx_run_step_records_run_id ON run_step_records(run_record_id)");
+        conn.Execute("CREATE INDEX IF NOT EXISTS idx_workflow_variables_workflow_id ON workflow_variables(workflow_id)");
+        conn.Execute("CREATE INDEX IF NOT EXISTS idx_workflow_variables_key ON workflow_variables(key)");
+        conn.Execute("CREATE INDEX IF NOT EXISTS idx_variable_values_variable_id ON variable_values(variable_id)");
+        conn.Execute("CREATE INDEX IF NOT EXISTS idx_variable_values_workflow_id ON variable_values(workflow_id)");
+        conn.Execute("CREATE INDEX IF NOT EXISTS idx_variable_values_run_id ON variable_values(run_id)");
     }
 }

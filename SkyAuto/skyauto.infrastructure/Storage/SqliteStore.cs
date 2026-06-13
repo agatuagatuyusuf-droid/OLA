@@ -4,10 +4,11 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using SkyAuto.Core.Models;
 using SkyAuto.Core.Ola;
+using SkyAuto.Core.Variables;
 
 namespace SkyAuto.Infrastructure.Storage;
 
-public class SqliteStore : IWorkflowStore, IAssetStore, IScheduleStore, IRunRecordStore
+public class SqliteStore : IWorkflowStore, IAssetStore, IScheduleStore, IRunRecordStore, IVariableStore
 {
     private readonly string _connectionString;
 
@@ -318,6 +319,148 @@ public class SqliteStore : IWorkflowStore, IAssetStore, IScheduleStore, IRunReco
     {
         using var conn = CreateConnection();
         return conn.Query<OlaFunctionStatusRecord>("SELECT * FROM ola_function_status ORDER BY category, chinese_name").ToList();
+    }
+
+    #endregion
+
+    private const string VariableDefColumns = "id, workflow_id AS WorkflowId, name, key, type, scope, default_value AS DefaultValue, required, is_secret AS IsSecret, description, created_at AS CreatedAt, updated_at AS UpdatedAt";
+    private const string VariableValueColumns = "id, variable_id AS VariableId, workflow_id AS WorkflowId, run_id AS RunId, step_id AS StepId, value, is_encrypted AS IsEncrypted, created_at AS CreatedAt, updated_at AS UpdatedAt";
+
+    #region Variables (IVariableStore)
+
+    public List<VariableDefinition> GetVariables(string? workflowId = null)
+    {
+        using var conn = CreateConnection();
+        if (string.IsNullOrEmpty(workflowId))
+        {
+            return conn.Query<VariableDefinition>(
+                $"SELECT {VariableDefColumns} FROM workflow_variables WHERE workflow_id IS NULL OR workflow_id = '' ORDER BY scope, name")
+                .ToList();
+        }
+
+        return conn.Query<VariableDefinition>(
+            $"SELECT {VariableDefColumns} FROM workflow_variables WHERE workflow_id = @WorkflowId OR workflow_id IS NULL OR workflow_id = '' ORDER BY scope, name",
+            new { WorkflowId = workflowId }).ToList();
+    }
+
+    public VariableDefinition? GetVariableByKey(string key, string? workflowId = null)
+    {
+        using var conn = CreateConnection();
+
+        if (!string.IsNullOrEmpty(workflowId))
+        {
+            var result = conn.QueryFirstOrDefault<VariableDefinition>(
+                $"SELECT {VariableDefColumns} FROM workflow_variables WHERE key = @Key AND workflow_id = @WorkflowId",
+                new { Key = key, WorkflowId = workflowId });
+
+            if (result != null) return result;
+
+            return conn.QueryFirstOrDefault<VariableDefinition>(
+                $"SELECT {VariableDefColumns} FROM workflow_variables WHERE key = @Key AND (workflow_id IS NULL OR workflow_id = '')",
+                new { Key = key });
+        }
+
+        return conn.QueryFirstOrDefault<VariableDefinition>(
+            $"SELECT {VariableDefColumns} FROM workflow_variables WHERE key = @Key AND (workflow_id IS NULL OR workflow_id = '')",
+            new { Key = key });
+    }
+
+    public void SaveVariable(VariableDefinition variable)
+    {
+        variable.Normalize();
+        variable.Validate();
+
+        using var conn = CreateConnection();
+        conn.Execute(@"INSERT OR REPLACE INTO workflow_variables
+            (id, workflow_id, name, key, type, scope, default_value, required, is_secret, description, created_at, updated_at)
+            VALUES (@Id, @WorkflowId, @Name, @Key, @Type, @Scope, @DefaultValue, @Required, @IsSecret, @Description, @CreatedAt, @UpdatedAt)",
+            new
+            {
+                variable.Id,
+                WorkflowId = variable.WorkflowId ?? (string?)null,
+                variable.Name,
+                variable.Key,
+                Type = variable.Type.ToString(),
+                Scope = variable.Scope.ToString(),
+                DefaultValue = variable.DefaultValue ?? (string?)null,
+                Required = variable.Required ? 1 : 0,
+                IsSecret = variable.IsSecret ? 1 : 0,
+                Description = variable.Description ?? (string?)null,
+                CreatedAt = variable.CreatedAt.ToString("o"),
+                UpdatedAt = variable.UpdatedAt.ToString("o")
+            });
+    }
+
+    public void DeleteVariable(string id)
+    {
+        using var conn = CreateConnection();
+        conn.Execute("DELETE FROM variable_values WHERE variable_id = @Id", new { Id = id });
+        conn.Execute("DELETE FROM workflow_variables WHERE id = @Id", new { Id = id });
+    }
+
+    public List<VariableValue> GetVariableValues(string? workflowId = null, string? runId = null)
+    {
+        using var conn = CreateConnection();
+
+        if (!string.IsNullOrEmpty(workflowId) && !string.IsNullOrEmpty(runId))
+        {
+            return conn.Query<VariableValue>(
+                $"SELECT {VariableValueColumns} FROM variable_values WHERE workflow_id = @WorkflowId AND run_id = @RunId ORDER BY updated_at DESC",
+                new { WorkflowId = workflowId, RunId = runId }).ToList();
+        }
+
+        if (!string.IsNullOrEmpty(workflowId))
+        {
+            return conn.Query<VariableValue>(
+                $"SELECT {VariableValueColumns} FROM variable_values WHERE workflow_id = @WorkflowId ORDER BY updated_at DESC",
+                new { WorkflowId = workflowId }).ToList();
+        }
+
+        if (!string.IsNullOrEmpty(runId))
+        {
+            return conn.Query<VariableValue>(
+                $"SELECT {VariableValueColumns} FROM variable_values WHERE run_id = @RunId ORDER BY updated_at DESC",
+                new { RunId = runId }).ToList();
+        }
+
+        return conn.Query<VariableValue>($"SELECT {VariableValueColumns} FROM variable_values ORDER BY updated_at DESC").ToList();
+    }
+
+    public void SaveVariableValue(VariableValue value)
+    {
+        value.UpdatedAt = DateTime.Now;
+        using var conn = CreateConnection();
+        conn.Execute(@"INSERT OR REPLACE INTO variable_values
+            (id, variable_id, workflow_id, run_id, step_id, value, is_encrypted, created_at, updated_at)
+            VALUES (@Id, @VariableId, @WorkflowId, @RunId, @StepId, @Value, @IsEncrypted, @CreatedAt, @UpdatedAt)",
+            new
+            {
+                value.Id,
+                value.VariableId,
+                WorkflowId = value.WorkflowId ?? (string?)null,
+                RunId = value.RunId ?? (string?)null,
+                StepId = value.StepId ?? (string?)null,
+                value.Value,
+                IsEncrypted = value.IsEncrypted ? 1 : 0,
+                CreatedAt = value.CreatedAt.ToString("o"),
+                UpdatedAt = value.UpdatedAt.ToString("o")
+            });
+    }
+
+    public VariableValue? GetLatestValue(string variableId, string? workflowId = null)
+    {
+        using var conn = CreateConnection();
+
+        if (!string.IsNullOrEmpty(workflowId))
+        {
+            return conn.QueryFirstOrDefault<VariableValue>(
+                $"SELECT {VariableValueColumns} FROM variable_values WHERE variable_id = @VariableId AND workflow_id = @WorkflowId ORDER BY updated_at DESC, created_at DESC LIMIT 1",
+                new { VariableId = variableId, WorkflowId = workflowId });
+        }
+
+        return conn.QueryFirstOrDefault<VariableValue>(
+            $"SELECT {VariableValueColumns} FROM variable_values WHERE variable_id = @VariableId ORDER BY updated_at DESC, created_at DESC LIMIT 1",
+            new { VariableId = variableId });
     }
 
     #endregion
