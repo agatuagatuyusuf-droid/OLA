@@ -1,0 +1,4 @@
+# Local OLA binary dependencies. Do not commit ordinary Git blobs here.
+# Use GitHub Release or Git LFS if binary distribution is required.
+*
+!.gitignore
